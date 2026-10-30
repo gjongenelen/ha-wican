@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -12,9 +12,17 @@ from homeassistant.const import CONF_WEBHOOK_ID
 from homeassistant.helpers.network import NoURLAvailableError
 
 from custom_components.wican import _async_register_webhook_on_device
-from custom_components.wican.const import DOMAIN
+from custom_components.wican.const import CONF_POST_INTERVAL, DOMAIN
+from custom_components.wican.models import WiCANRuntimeData
 
 from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+
+@pytest.fixture
+def automatic_webhook_url():
+    """Exercise upstream URL discovery with the fork override disabled."""
+    with patch("custom_components.wican.helpers.WEBHOOK_BASE_URL", None):
+        yield
 
 
 async def test_setup_entry_success(
@@ -176,6 +184,7 @@ async def test_webhook_no_duplicate_registration(
 async def test_webhook_registration_no_url_available(
     hass: HomeAssistant,
     mock_aiohttp_session,
+    automatic_webhook_url,
 ) -> None:
     """Test webhook registration falls back to stored webhook_url."""
     config_entry = MockConfigEntry(
@@ -223,6 +232,7 @@ async def test_webhook_registration_no_url_available(
 async def test_webhook_registration_non_pro_uses_single_local_http_url(
     hass: HomeAssistant,
     mock_aiohttp_session,
+    automatic_webhook_url,
 ) -> None:
     """Test non-PRO firmware registers a single local HTTP webhook URL."""
     config_entry = MockConfigEntry(
@@ -275,6 +285,7 @@ async def test_webhook_registration_non_pro_uses_single_local_http_url(
 async def test_webhook_registration_pro_uses_local_and_external_urls(
     hass: HomeAssistant,
     mock_aiohttp_session,
+    automatic_webhook_url,
 ) -> None:
     """Test PRO firmware 4.49+ receives both local and external webhook URLs."""
     config_entry = MockConfigEntry(
@@ -334,6 +345,7 @@ async def test_webhook_registration_pro_uses_local_and_external_urls(
 async def test_webhook_registration_pro_pre_449_uses_single_local_url(
     hass: HomeAssistant,
     mock_aiohttp_session,
+    automatic_webhook_url,
 ) -> None:
     """Test older PRO firmware keeps the single local webhook URL payload."""
     config_entry = MockConfigEntry(
@@ -386,6 +398,7 @@ async def test_webhook_registration_pro_pre_449_uses_single_local_url(
 async def test_webhook_registration_https_local_falls_back_to_http_stored_url(
     hass: HomeAssistant,
     mock_aiohttp_session,
+    automatic_webhook_url,
 ) -> None:
     """Test HTTPS local URLs are rejected for device registration."""
     config_entry = MockConfigEntry(
@@ -430,10 +443,53 @@ async def test_webhook_registration_https_local_falls_back_to_http_stored_url(
     assert session.post.await_args.kwargs["json"]["url"] == entry.data["webhook_url"]
 
 
+@pytest.mark.parametrize("post_interval", [15, 42])
+async def test_webhook_registration_keeps_http_override_on_reregistration(
+    hass: HomeAssistant,
+    post_interval: int,
+) -> None:
+    """Keep the HTTP receiver and interval when HA advertises HTTPS URLs."""
+    hass.config.internal_url = "https://home.jongenelen.net"
+    hass.config.external_url = "https://home.jongenelen.net"
+    config_entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="WiCAN OBD",
+        data={
+            "host": "http://172.16.32.113",
+            CONF_WEBHOOK_ID: "existing_webhook_id",
+            "webhook_url": "https://home.jongenelen.net/api/webhook/old_id",
+        },
+        options={CONF_POST_INTERVAL: post_interval},
+    )
+    config_entry.add_to_hass(hass)
 
+    config_entry.runtime_data = WiCANRuntimeData(
+        coordinator=Mock(),
+        github_coordinator=Mock(),
+        webhook_id=config_entry.data[CONF_WEBHOOK_ID],
+        post_interval=config_entry.options[CONF_POST_INTERVAL],
+    )
+    session = AsyncMock()
+    response = AsyncMock()
+    response.status = 200
+    session.post.return_value = response
 
+    with (
+        patch("custom_components.wican.async_get_clientsession", return_value=session),
+        patch(
+            "custom_components.wican.helpers.get_url",
+            side_effect=AssertionError("WiCAN must use its own HTTP receiver"),
+        ),
+    ):
+        assert await _async_register_webhook_on_device(hass, config_entry) is True
+        assert await _async_register_webhook_on_device(hass, config_entry) is True
 
-
-
-
-
+    assert session.post.await_count == 2
+    for call in session.post.await_args_list:
+        assert call.kwargs["json"] == {
+            "url": "http://10.143.166.89:8123/api/webhook/existing_webhook_id",
+            "enabled": True,
+            "interval": post_interval,
+        }
+    assert hass.config.internal_url == "https://home.jongenelen.net"
+    assert hass.config.external_url == "https://home.jongenelen.net"

@@ -11,7 +11,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.network import NoURLAvailableError, get_url
 from yarl import URL
 
-from .const import DOMAIN
+from .const import DOMAIN, WEBHOOK_BASE_URL
 from .exceptions import WiCANConnectionError, WiCANError
 
 if TYPE_CHECKING:
@@ -53,6 +53,12 @@ def resolve_local_webhook_url(
     require_current_request: bool = False,
 ) -> str:
     """Resolve a local-only HTTP webhook URL for devices that cannot use HTTPS."""
+    if WEBHOOK_BASE_URL:
+        return _ensure_allowed_webhook_scheme(
+            build_webhook_url(WEBHOOK_BASE_URL, webhook_id),
+            allowed_schemes={"http"},
+        )
+
     try:
         local_base = get_url(
             hass,
@@ -179,9 +185,8 @@ def resolve_webhook_url(
 ) -> str:
     """Resolve the best available absolute webhook URL.
 
-    Prefer Home Assistant's normal URL resolution with IPs allowed and internal
-    addresses favored, then optionally fall back to the active request host.
-    Finally, reuse a previously stored webhook URL if one exists.
+    Use this fork's HTTP receiver when configured. Otherwise prefer Home
+    Assistant's internal URL, then the active request host and stored URL.
     """
     return resolve_local_webhook_url(
         hass,

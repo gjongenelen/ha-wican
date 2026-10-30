@@ -11,7 +11,11 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.network import NoURLAvailableError
 
 from custom_components.wican.exceptions import WiCANConnectionError, WiCANError
-from custom_components.wican.helpers import resolve_device_webhook_urls, wican_exception_handler
+from custom_components.wican.helpers import (
+    resolve_device_webhook_urls,
+    resolve_webhook_url,
+    wican_exception_handler,
+)
 
 
 class MockEntity:
@@ -153,6 +157,30 @@ async def test_decorator_with_function_arguments():
     # Should not interfere with function arguments
     # (function returns None due to decorator, but shouldn't crash)
     assert entity.coordinator.async_update_listeners.called
+
+
+@pytest.mark.parametrize("webhook_id", ["existing_id", "new_id"])
+def test_resolve_webhook_url_uses_http_override_during_setup(
+    hass: HomeAssistant,
+    webhook_id: str,
+) -> None:
+    """Setup uses WiCAN's HTTP receiver independently of HA HTTPS URLs."""
+    hass.config.internal_url = "https://internal.example.com"
+    hass.config.external_url = "https://external.example.com"
+
+    with patch(
+        "custom_components.wican.helpers.get_url",
+        side_effect=AssertionError("WiCAN must use its own HTTP receiver"),
+    ):
+        assert resolve_webhook_url(
+            hass,
+            webhook_id,
+            fallback_url="https://external.example.com/api/webhook/stale_id",
+            require_current_request=True,
+        ) == f"http://10.143.166.89:8123/api/webhook/{webhook_id}"
+
+    assert hass.config.internal_url == "https://internal.example.com"
+    assert hass.config.external_url == "https://external.example.com"
 
 
 def test_resolve_device_webhook_urls_prefers_local_http_and_external_https(

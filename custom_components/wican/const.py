@@ -9,6 +9,8 @@ MIN_POST_INTERVAL = 1
 MAX_POST_INTERVAL = 3600
 
 # Webhook Registration
+# Fork-specific receiver for WiCAN; set to None to restore HA URL discovery.
+WEBHOOK_BASE_URL = "http://10.143.166.89:8123"
 WEBHOOK_REGISTRATION_TIMEOUT = 10  # seconds
 WEBHOOK_RETRY_DELAY_BASE = 2  # seconds for exponential backoff
 WEBHOOK_MAX_RETRIES = 3

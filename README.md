@@ -1,7 +1,11 @@
 [![hacs_badge](https://img.shields.io/badge/HACS-Default-41BDF5.svg?style=for-the-badge)](https://github.com/hacs/integration)
 
 # About
-This is the official HomeAssistant integration for [WiCAN by meatpi](https://github.com/meatpiHQ/wican-fw).
+This is a fork of the Home Assistant integration for [WiCAN by meatpi](https://github.com/meatpiHQ/wican-fw).
+
+This fork registers WiCAN's local webhook at `http://10.143.166.89:8123/api/webhook/<webhook_id>`, including when registering again after a restart or an options update. Home Assistant's global internal and external URLs can stay on HTTPS. The existing webhook ID, enabled flag and post interval handling are unchanged.
+
+The receiver is defined by `WEBHOOK_BASE_URL` in `custom_components/wican/const.py`. Set it to `None` to restore automatic Home Assistant URL discovery. Install tag `v1.0.2` from this fork in HACS, then restart Home Assistant.
 
 This integration is available via HACS, and not part of the default HomeAssistant integrations. 
 
@@ -19,7 +23,7 @@ It is very much in an Alpha stage at the moment, and under constant changes, hop
 ## Manual Installation
 1. Add the integration repository to HACS and install the WiCAN integration.
    - Follow the official guide to [add a custom repository](https://www.hacs.xyz/docs/faq/custom_repositories/).
-     - Repository URL: 'https://github.com/jay-oswald/ha-wican'
+     - Repository URL: 'https://github.com/gjongenelen/ha-wican'
      - Type: 'Integration'
    - Follow the official guide to [download a repository](https://www.hacs.xyz/docs/use/repositories/dashboard/#downloading-a-repository)
 2. Restart home assistant
@@ -27,7 +31,7 @@ It is very much in an Alpha stage at the moment, and under constant changes, hop
 
 ## Installation via My Home Assistant
 1. Add the integration through this link: 
-[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=jay-oswald&repository=ha-wican&category=integration)
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=gjongenelen&repository=ha-wican&category=integration)
 2. Restart home assistant
 3. Continue with Configuration steps below
 
